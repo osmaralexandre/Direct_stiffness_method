@@ -1,4 +1,4 @@
-# This program solves plane frames with articulations and support displacements.
+# This program solves plane frames with hinges and support displacements.
 # The structure is solved by using direct stiffness method.
 import os
 import numpy as np
@@ -20,15 +20,19 @@ coord = np.matrix([[0, 0, 2, 4, 4],
                     [0, 2, 5, 2, 1]])
 
 # Matrix that defines the support conditions. 0 for free and 1 for support.
-cont = np.matrix([[1, 0, 0, 0, 1],
+"""
+    Each node of the frame has 3 degrees of freedon (dof). The first and second rows represents the displacements
+    in x and y directions and the third row is the rotational dof.
+"""
+support = np.matrix([[1, 0, 0, 0, 1],
                     [1, 0, 0, 0, 1],
                     [0, 0, 0, 0, 1]])
-                  
+               
 # Matrix that indicates the nodal loads.
 """
     If the load position coincides with 1 in cont, it will correspond to a support displacement.
 """
-carr = np.matrix([[0, 1, 0, 0, 0.1],
+load = np.matrix([[0, 1, 0, 0, 0.1],
                     [0, 0, 0, 0, 0],
                     [0, 0, 20, 0, 0]])
 
@@ -36,22 +40,22 @@ carr = np.matrix([[0, 1, 0, 0, 0.1],
 """
     Indicates the inicial and the final node of each element.
 """
-inc = np.matrix([[0, 1, 2, 1, 4],
-                    [1, 2, 3, 3, 3]])
+inc = np.matrix([[0, 1, 2, 1, 3],
+                    [1, 2, 3, 3, 4]])
 
-# Matrix with the position of the articulations.
+# Matrix with the position of the hinges.
 """
-    1 if the node of that element is articulated. Incidence matrix shows the correlation between the nodes and the elements.
+    1 if the node is articulated in that element. Incidence matrix shows the correlation between the nodes and the elements.
 """
-rot = np.matrix([[0, 0, 0, 1, 0],
-                    [0, 0, 0, 1, 1]])
+hinge = np.matrix([[0, 0, 0, 1, 1],
+                    [0, 0, 0, 1, 0]])
 
-# Stiffness for each element.
+# Stiffness of each element.
 EA = np.matrix([1,1,1,1,1])*50
 EJ = np.matrix([1,1,1,1,1])*60
 
 # Some important constants.
-nn = np.size(coord,1); nb = np.size(inc,1); C = 10**10; cdef = 5; cap = 0.2; cn = 0.2; cq = 0.2; cf = 0.2; drot = 0.05
+nn = np.size(coord,1); nb = np.size(inc,1); C = 10**10; cdef = 5; cap = 0.2; cn = 0.2; cq = 0.2; cf = 0.2; d_hinge = 0.05
 
 # Stiffness matrix assembly
 ngl = 3*nn
@@ -67,12 +71,12 @@ for i in range(nb):
     kn = np.matrix([[EA[0,i]/L, 0, 0],
                     [0, 4*EJ[0,i]/L, 2*EJ[0,i]/L],
                     [0, 2*EJ[0,i]/L, 4*EJ[0,i]/L]])
-    knl.append(kn) # A list with each stiffness matrix fo the natural system
+    knl.append(kn) # A list with each stiffness matrix in a natural system
 
-    # Consideration of articulations
-    if rot[0,i] == 1:
+    # Consideration of hinges
+    if hinge[0,i] == 1:
         kn = kn - kn[0:3, 1]*kn[1, 0:3] / kn[1, 1]
-    if rot[1, i] == 1:
+    if hinge[1, i] == 1:
         kn = kn - kn[0:3, 2]*kn[2, 0:3] / kn[2, 2]
 
     # Transformation to the local system
@@ -92,8 +96,8 @@ for i in range(nb):
 p = np.zeros((ngl,1))
 for i in range(nn):
     for j in range(3):
-        p[i * 3 + j] = carr[j, i] * (1 + C * cont[j, i])
-        K[i * 3 + j, i * 3 + j] = K[i * 3 + j, i * 3 + j] + C * cont[j, i]
+        p[i * 3 + j] = load[j, i] * (1 + C * support[j, i])
+        K[i * 3 + j, i * 3 + j] = K[i * 3 + j, i * 3 + j] + C * support[j, i]
 
 # Solving  the problem
 d = np.linalg.solve(K, p)
@@ -143,14 +147,14 @@ for i in range(nb):
     T = np.matrix([[-c,-s,0,c,s,0],[-s/L,c/L,1,s/L,-c/L,0],[-s/L,c/L,0,s/L,-c/L,1]])
     epsilonn = T.dot(epsilonl)
     knli = knl[i]
-    if rot[0,i] == 1:
-        if rot[1,i] == 1:
+    if hinge[0,i] == 1:
+        if hinge[1,i] == 1:
             T = np.linalg.inv(knli[1:3,1:3]).dot(knli[1:3,0])
             epsilonl[2] = epsilonl[2] - epsilonn[1] - T[0] * epsilonn[0]
             epsilonl[5] = epsilonl[5] - epsilonn[2] - T[1] * epsilonn[0]
         else:
             epsilonl[2] = epsilonl[2] - knli[1,0:3].dot(epsilonn) / knli[1, 1]
-    elif rot[1, i] == 1:
+    elif hinge[1, i] == 1:
         epsilonl[5] = epsilonl[5] - knli[2,0:3].dot(epsilonn) / knli[2, 2]
     uv = (disp.dot(Ta)).dot(epsilonl)*cdef
     xd = coord[0, inc[0, i]] + xi * dx + c * uv[0] - s * uv[1]
@@ -178,77 +182,77 @@ ax = np.matrix([[0,0],[-1,.5],[-1,-.5],[0,0]])
 ay = np.matrix([[0,0],[-.5,-1],[.5,-1],[0,0]])
 ar = 0.5*np.matrix([[-1,-1],[1,-1],[1,1],[-1,1],[-1,-1]])
 ipx = 0; ipy = 0; ipr = 0; irot = 0
-apoiox_x = []; apoioy_x = []; apoior_x = []
-apoiox_y = []; apoioy_y = []; apoior_y = []
+supportx_x = []; supporty_x = []; supportr_x = []
+supportx_y = []; supporty_y = []; supportr_y = []
 for i in range(nn):
-    if cont[0,i] == 1:
+    if support[0,i] == 1:
         ipx = ipx + 1
         for j in range(4):
-            apoiox_x.append(ax[j,0]*cap + coord[0, i])
-            apoiox_y.append(ax[j,1]*cap + coord[1, i])
-        axs[0, 0].plot(apoiox_x[4*ipx-4:4*ipx],apoiox_y[4*ipx-4:4*ipx],'b')
-        axs[1, 0].plot(apoiox_x[4*ipx-4:4*ipx],apoiox_y[4*ipx-4:4*ipx],'b')
-        axs[0, 1].plot(apoiox_x[4*ipx-4:4*ipx],apoiox_y[4*ipx-4:4*ipx],'b')
-        axs[1, 1].plot(apoiox_x[4*ipx-4:4*ipx],apoiox_y[4*ipx-4:4*ipx],'b')
-    if cont[1,i] == 1:
+            supportx_x.append(ax[j,0]*cap + coord[0, i])
+            supportx_y.append(ax[j,1]*cap + coord[1, i])
+        axs[0, 0].plot(supportx_x[4*ipx-4:4*ipx],supportx_y[4*ipx-4:4*ipx],'b')
+        axs[1, 0].plot(supportx_x[4*ipx-4:4*ipx],supportx_y[4*ipx-4:4*ipx],'b')
+        axs[0, 1].plot(supportx_x[4*ipx-4:4*ipx],supportx_y[4*ipx-4:4*ipx],'b')
+        axs[1, 1].plot(supportx_x[4*ipx-4:4*ipx],supportx_y[4*ipx-4:4*ipx],'b')
+    if support[1,i] == 1:
         ipy = ipy + 1
         for j in range(4):
-            apoioy_x.append(ay[j,0]*cap + coord[0, i])
-            apoioy_y.append(ay[j,1]*cap + coord[1, i])
-        axs[0, 0].plot(apoioy_x[4*ipy-4:4*ipy],apoioy_y[4*ipy-4:4*ipy],'b')
-        axs[1, 0].plot(apoioy_x[4*ipy-4:4*ipy],apoioy_y[4*ipy-4:4*ipy],'b')
-        axs[0, 1].plot(apoioy_x[4*ipy-4:4*ipy],apoioy_y[4*ipy-4:4*ipy],'b')
-        axs[1, 1].plot(apoioy_x[4*ipy-4:4*ipy],apoioy_y[4*ipy-4:4*ipy],'b')
-    if cont[2,i] == 1:
+            supporty_x.append(ay[j,0]*cap + coord[0, i])
+            supporty_y.append(ay[j,1]*cap + coord[1, i])
+        axs[0, 0].plot(supporty_x[4*ipy-4:4*ipy],supporty_y[4*ipy-4:4*ipy],'b')
+        axs[1, 0].plot(supporty_x[4*ipy-4:4*ipy],supporty_y[4*ipy-4:4*ipy],'b')
+        axs[0, 1].plot(supporty_x[4*ipy-4:4*ipy],supporty_y[4*ipy-4:4*ipy],'b')
+        axs[1, 1].plot(supporty_x[4*ipy-4:4*ipy],supporty_y[4*ipy-4:4*ipy],'b')
+    if support[2,i] == 1:
         ipr = ipr + 1
         for j in range(5):
-            apoior_x.append(ar[j,0]*cap + coord[0, i])
-            apoior_y.append(ar[j,1]*cap + coord[1, i])
-        axs[0, 0].plot(apoior_x[5*ipr-5:5*ipr],apoior_y[5*ipr-5:5*ipr],'b')
-        axs[1, 0].plot(apoior_x[5*ipr-5:5*ipr],apoior_y[5*ipr-5:5*ipr],'b')
-        axs[0, 1].plot(apoior_x[5*ipr-5:5*ipr],apoior_y[5*ipr-5:5*ipr],'b')
-        axs[1, 1].plot(apoior_x[5*ipr-5:5*ipr],apoior_y[5*ipr-5:5*ipr],'b')
+            supportr_x.append(ar[j,0]*cap + coord[0, i])
+            supportr_y.append(ar[j,1]*cap + coord[1, i])
+        axs[0, 0].plot(supportr_x[5*ipr-5:5*ipr],supportr_y[5*ipr-5:5*ipr],'b')
+        axs[1, 0].plot(supportr_x[5*ipr-5:5*ipr],supportr_y[5*ipr-5:5*ipr],'b')
+        axs[0, 1].plot(supportr_x[5*ipr-5:5*ipr],supportr_y[5*ipr-5:5*ipr],'b')
+        axs[1, 1].plot(supportr_x[5*ipr-5:5*ipr],supportr_y[5*ipr-5:5*ipr],'b')
 
-# Plot of the articulations
-trot_x = []; trot_y = []
+# Plot of the hinges
+t_hinge_x = []; t_hinge_y = []
 for i in range(nb):
-    if rot[0,i] == 1:
+    if hinge[0,i] == 1:
         irot = irot + 1
-        trot_x.append(coord[0,inc[0,i]]*(1-drot)+coord[0,inc[1,i]]*drot)
-        trot_y.append(coord[1, inc[0, i]] * (1 - drot) + coord[1, inc[1, i]] * drot)
-    if rot[1, i] == 1:
+        t_hinge_x.append(coord[0,inc[0,i]]*(1-d_hinge)+coord[0,inc[1,i]]*d_hinge)
+        t_hinge_y.append(coord[1, inc[0, i]] * (1 - d_hinge) + coord[1, inc[1, i]] * d_hinge)
+    if hinge[1, i] == 1:
         irot = irot + 1
-        trot_x.append(coord[0, inc[1, i]] * (1 - drot) + coord[0, inc[0, i]] * drot)
-        trot_y.append(coord[1, inc[1, i]] * (1 - drot) + coord[1, inc[0, i]] * drot)
+        t_hinge_x.append(coord[0, inc[1, i]] * (1 - d_hinge) + coord[0, inc[0, i]] * d_hinge)
+        t_hinge_y.append(coord[1, inc[1, i]] * (1 - d_hinge) + coord[1, inc[0, i]] * d_hinge)
 for j in range(irot):
-    axs[0, 0].plot(trot_x[j],trot_y[j],'gray',marker='o')
-    axs[1, 0].plot(trot_x[j],trot_y[j],'gray',marker='o')
-    axs[0, 1].plot(trot_x[j],trot_y[j],'gray',marker='o')
-    axs[1, 1].plot(trot_x[j],trot_y[j],'gray',marker='o')
+    axs[0, 0].plot(t_hinge_x[j],t_hinge_y[j],'gray',marker='o')
+    axs[1, 0].plot(t_hinge_x[j],t_hinge_y[j],'gray',marker='o')
+    axs[0, 1].plot(t_hinge_x[j],t_hinge_y[j],'gray',marker='o')
+    axs[1, 1].plot(t_hinge_x[j],t_hinge_y[j],'gray',marker='o')
 
 # Bending moment
-bend_x = np.zeros((nb*4,1)); bend_y = np.zeros((nb*4,1)); cont = 0
+bend_x = np.zeros((nb*4,1)); bend_y = np.zeros((nb*4,1)); count = 0
 for i in range(nb):
     for j in range(4):
-        bend_x[cont] = bending[i][j][0]
-        bend_y[cont] = bending[i][j][1]
-        cont = cont+1
+        bend_x[count] = bending[i][j][0]
+        bend_y[count] = bending[i][j][1]
+        count = count+1
 
 # Shear forces
-shear_x = np.zeros((nb*4,1));shear_y = np.zeros((nb*4,1)); cont = 0
+shear_x = np.zeros((nb*4,1));shear_y = np.zeros((nb*4,1)); count = 0
 for i in range(nb):
     for j in range(4):
-        shear_x[cont] = shear[i][j][0]
-        shear_y[cont] = shear[i][j][1]
-        cont = cont+1
+        shear_x[count] = shear[i][j][0]
+        shear_y[count] = shear[i][j][1]
+        count = count+1
 
 # Normal forces
-norm_x = np.zeros((nb*4,1));norm_y = np.zeros((nb*4,1)); cont = 0
+norm_x = np.zeros((nb*4,1));norm_y = np.zeros((nb*4,1)); count = 0
 for i in range(nb):
     for j in range(4):
-        norm_x[cont] = normal[i][j][0]
-        norm_y[cont] = normal[i][j][1]
-        cont = cont+1
+        norm_x[count] = normal[i][j][0]
+        norm_y[count] = normal[i][j][1]
+        count = count+1
 
 axs[0, 0].set_title("Displacements")
 axs[0, 0].axis('scaled')
