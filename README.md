@@ -134,7 +134,7 @@ After all these steps, this program is ready to calculate the displacements in e
     ```
 
 <p align="center">
-    <img width="300" src = "readme_images/frame2.png">
+    <img width="450" src = "readme_images/frame2.png">
 </p>
 
 Made by Osmar Alexandre. See my [LinkedIn](https://www.linkedin.com/in/osmaralexandre/)
