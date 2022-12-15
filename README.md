@@ -1,6 +1,6 @@
 # Direct Stiffness Method 2D frame 
 
-This program consist to solve 2D frames using the direct stiffness method.
+This program consist of solving 2D frames using the direct stiffness method.
 
 ## How to use the program - step by step:
 
@@ -109,6 +109,7 @@ After all these steps, this program is ready to calculate the displacements in e
 3. Load matrix:
 
     ```bash
+    # Fy4 = -5
     load = np.matrix([[0, 0, 0, 0, 0, 0],
                         [0, 0, 0, 0, -5, 0],
                         [0, 0, 0, 0, 0, 0]])
